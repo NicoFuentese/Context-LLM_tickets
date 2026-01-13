@@ -2,6 +2,47 @@
 
 Asistente basado en IA para infraestructura TI, diseñado para analizar cargas de trabajo de GLPi y sugerir asignaciones óptimas.
 
+# Contexto del Proyecto: Problemática y Solución
+
+## 🔴 La Problemática (Legacy Ops)
+
+En la operación diaria de una Mesa de Ayuda (Service Desk), los coordinadores y Tech Leads enfrentan tres desafíos críticos que ralentizan el tiempo de resolución (MTTR):
+
+1. Ceguera Operativa: Asignar tickets basándose en la intuición en lugar de datos reales. Es difícil saber quién está saturado y quién está libre sin revisar múltiples reportes.
+
+2. Fatiga de Decisión: Leer descripciones técnicas complejas para decidir si un ticket es de "Redes", "Servidores" o "Soporte N1" consume tiempo valioso.
+
+3. Riesgo de Seguridad en IA: El uso de herramientas públicas (como ChatGPT web) para analizar tickets implica un riesgo alto de fuga de datos (PII, contraseñas, IPs internas).
+
+## 🟢 La Solución: Smart-IT Ops (Arquitectura)
+
+Smart-IT es un sistema de Asistencia Operativa Basada en Contexto de Tecnicos y Tickets.
+
+### Flujo de Datos (Arquitectura RAG Lite)
+
+El sistema utiliza un enfoque de Retrieval-Augmented Generation (RAG) simplificado para garantizar que la IA nunca "alucine" datos ni invente técnicos que no existen.
+
+```mermaid
+graph LR
+    A[GLPi Export] -->|tickets.csv| B(Pandas Engine)
+    B -->|1. Filtra Tickets Activos| C{Lógica Python}
+    B -->|2. Busca ID Específico| C
+    C -->|Inyecta Contexto Real| D[Prompt del Sistema]
+    E[Pregunta Usuario] --> D
+    D -->|Contexto + Pregunta| F[Google Gemini LLM]
+    F -->|Recomendación Segura| G[Streamlit UI]
+```
+
+## Estrategia del LLM
+
+Para lograr respuestas precisas y seguras, implementamos tres capas de control en el modelo de lenguaje:
+
+1. Inyección Dinámica de Contexto: La IA no tiene "memoria" de tu empresa. En cada consulta, el sistema inyecta en tiempo real la tabla de carga laboral (Técnico A: 5 tickets, Técnico B: 0 tickets) y el detalle del ticket consultado. Esto fuerza al modelo a responder basándose matemáticamente en la carga actual.
+
+2. Guardrails de Privacidad (Sanitización): A través de Prompt Engineering defensivo, el sistema está instruido para detectar patrones sensibles (IPs, Hashes, Contraseñas) y censurarlos o ignorarlos antes de generar una respuesta, protegiendo la integridad de la infraestructura.
+
+3. Determinismo sobre Creatividad: Configuramos el modelo con una temperatura baja (0.3). No queremos un poeta; queremos un ingeniero. Las respuestas son directas, técnicas y justificadas con datos ("Asigna a X porque tiene Y carga").
+
 ## 📋 Requisitos Previos
 - Windows 11 (PowerShell)
 - Python 3.10+
