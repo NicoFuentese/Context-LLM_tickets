@@ -22,6 +22,32 @@ python -m venv venv
 
 # Instalar dependencias
 pip install -r requirements.txt
+
+# Desactivar entorno (Windows)
+deactivate
+
+```
+## ⚙️ Configuración de Variables de Entorno (.env)
+
+El archivo .env actúa como una "caja fuerte" que guarda sus claves secretas y preferencias locales.
+
+### Pasos para crearlo:
+1. Navegue a la carpeta raíz del proyecto.
+2. Cree un nuevo archivo de texto vacío.
+3. Renómbrelo a: .env (Importante eliminar el formato .txt).
+4. Abra el archivo con un editor de texto y pegue el siguiente contenido:
+
+```
+# ==========================================
+# CONFIGURACIÓN DE APP
+# ==========================================
+
+# [OBLIGATORIO] API Key de Google Gemini
+# Obténgala aquí: https://aistudio.google.com/app/apikey
+GOOGLE_API_KEY=pegue_aqui_su_api_key_sin_comillas
+
+# [OPCIONAL]
+GLPI_CSV_FILENAME=tickets.csv
 ```
 
 # Tu VS Code no te reconoce tus dependencias?
