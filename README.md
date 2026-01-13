@@ -29,7 +29,7 @@ graph LR
     B -->|2. Busca ID Específico| C
     C -->|Inyecta Contexto Real| D[Prompt del Sistema]
     E[Pregunta Usuario] --> D
-    D -->|Contexto + Pregunta| F[Google Gemini LLM]
+    D -->|Contexto + Pregunta| F[LLM Gemini 2.5 flash-Lite]
     F -->|Recomendación Segura| G[Streamlit UI]
 ```
 
