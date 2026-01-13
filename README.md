@@ -82,19 +82,19 @@ El siguiente diagrama ilustra el flujo de datos entre el usuario, la capa lógic
 ```mermaid
 graph TD
     subgraph "Local / Origen"
-        GLPi[("GLPi (Sistema Tickets)"))]
-        Admin((Admin TI))
+        GLPi[("GLPi - Sistema Tickets")]
+        Admin("Admin TI")
     end
 
-    subgraph "AWS EC2 (Tu VM Ubuntu)"
+    subgraph "AWS EC2 - Tu VM Ubuntu"
         direction TB
         CSV[("📂 data/tickets.csv")]
-        Env{".env (API Keys)"}
+        Env{".env API Keys"}
         
         subgraph "Aplicación Python"
-            UI[("🖥️ Streamlit (Frontend)")]
-            Logic["⚙️ App Logic (Backend)"]
-            Repo["🔍 Repository (Pandas)"]
+            UI[("🖥️ Streamlit Frontend")]
+            Logic["⚙️ App Logic Backend"]
+            Repo["🔍 Repository Pandas"]
             Service["🧠 LLM Service"]
         end
     end
@@ -110,15 +110,15 @@ graph TD
     %% Proceso Interno
     UI -->|1. Input Usuario| Logic
     Logic -->|2. Solicitar Datos| Repo
-    Repo -->|3. Leer & Calcular Carga| CSV
+    Repo -->|3. Leer y Calcular Carga| CSV
     Repo -->|4. Retornar Estado Equipo| Logic
     
     Logic -->|5. Cargar Credenciales| Env
-    Logic -->|6. Enviar Prompt + Contexto| Service
+    Logic -->|6. Enviar Prompt y Contexto| Service
     
     %% IA
-    Service -->|7. Request (HTTPS)| Gemini
-    Gemini -->|8. Response (Recomendación)| Service
+    Service -->|7. Request HTTPS| Gemini
+    Gemini -->|8. Response Recomendación| Service
     
     %% Respuesta Final
     Service -->|9. Texto Procesado| Logic
