@@ -74,3 +74,53 @@ python test_models.py
 #Correr proyecto
 streamlit run app.py
 ```
+
+## 🏗️ Arquitectura de la Solución
+
+El siguiente diagrama ilustra el flujo de datos entre el usuario, la capa lógica en AWS y el servicio de IA.
+
+```mermaid
+graph TD
+    subgraph "Local / Origen"
+        GLPi[("GLPi (Sistema Tickets)"))]
+        Admin((Admin TI))
+    end
+
+    subgraph "AWS EC2 (Tu VM Ubuntu)"
+        direction TB
+        CSV[("📂 data/tickets.csv")]
+        Env{".env (API Keys)"}
+        
+        subgraph "Aplicación Python"
+            UI[("🖥️ Streamlit (Frontend)")]
+            Logic["⚙️ App Logic (Backend)"]
+            Repo["🔍 Repository (Pandas)"]
+            Service["🧠 LLM Service"]
+        end
+    end
+
+    subgraph "Nube Externa"
+        Gemini("☁️ Google Gemini API")
+    end
+
+    %% Flujo de Datos
+    GLPi -.->|Exportación Manual/Diaria| CSV
+    Admin -->|Consulta via Browser :8501| UI
+    
+    %% Proceso Interno
+    UI -->|1. Input Usuario| Logic
+    Logic -->|2. Solicitar Datos| Repo
+    Repo -->|3. Leer & Calcular Carga| CSV
+    Repo -->|4. Retornar Estado Equipo| Logic
+    
+    Logic -->|5. Cargar Credenciales| Env
+    Logic -->|6. Enviar Prompt + Contexto| Service
+    
+    %% IA
+    Service -->|7. Request (HTTPS)| Gemini
+    Gemini -->|8. Response (Recomendación)| Service
+    
+    %% Respuesta Final
+    Service -->|9. Texto Procesado| Logic
+    Logic -->|10. Mostrar Respuesta| UI
+```
