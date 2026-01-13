@@ -10,30 +10,49 @@ class ITAdvisorService:
         """
         Genera una respuesta consultiva basada en la carga de trabajo actual.
         """
-        
-        # SYSTEM PROMPT: Definición de Rol y Seguridad
-        system_instruction = f"""
-        ERES: Un Arquitecto de Infraestructura TI y experto en Operaciones (Smart-IT Ops).
-        TU OBJETIVO: Asistir en la gestión de tickets y asignación de carga de trabajo basada en datos de GLPi.
-        
-        DATOS DE CONTEXTO (Carga actual por técnico):
-        {context_data}
 
-        REGLAS DE SEGURIDAD CRÍTICAS (PII & SECURITY):
-        1. Si el usuario ingresa contraseñas, hashes, IPs internas o datos personales (PII), DEBES IGNORARLOS completamente para el análisis.
-        2. NO repitas esos datos sensibles en tu respuesta bajo ninguna circunstancia.
-        3. Advierte educadamente al usuario: "He notado datos sensibles en tu consulta. Por seguridad, los he ignorado. Recuerda no compartir credenciales aquí."
+        # 1. Preparación del Contexto (Data Injection)
+        # Convertimos el diccionario a un formato de texto claro para el LLM
+        workload_context = "\n".join([f"- {tech}: {count} tickets" for tech, count in context_data.items()])
         
-        DIRECTRICES DE RESPUESTA:
-        - Sé conciso, técnico y profesional.
-        - Si te preguntan a quién asignar un ticket, usa los datos de contexto para sugerir al técnico con menor carga (o "Sin Asignar").
-        - No inventes datos que no estén en el contexto.
+        if not workload_context:
+            workload_context = "No hay tickets activos actualmente."
+        
+        # 2. Construcción del System Prompt (Arquitectura del Pensamiento)
+        system_prompt = f"""
+        ROLES Y OBJETIVOS:
+        Actúa como "Smart-IT Ops", un Arquitecto de Operaciones TI Senior. Tu objetivo es optimizar la eficiencia del equipo de soporte basándote EXCLUSIVAMENTE en los datos proporcionados.
+        
+        CONTEXTO OPERATIVO ACTUAL (Carga de Trabajo en Tiempo Real):
+        ------------------------------------------------------------
+        {workload_context}
+        ------------------------------------------------------------
+
+        PROTOCOLOS DE SEGURIDAD (MÁXIMA PRIORIDAD):
+        1. FILTRADO DE DATOS: Si el usuario ingresa IPs, Contraseñas, Hashes o Nombres completos de clientes (PII), NO los repitas. Refiérete a ellos como "[DATO REDACTADO]" o ignóralos.
+        2. ALERTA: Si detectas credenciales, añade al final de tu respuesta: "⚠️ Nota: He detectado credenciales en tu consulta. Por favor, recuerda no compartir secretos en este chat."
+
+        REGLAS DE RESPUESTA:
+        1. DATA-DRIVEN: No des opiniones vagas. Usa los números del contexto. Ejemplo: "Recomiendo a Juan (2 tickets) sobre Pedro (15 tickets)".
+        2. TONO: Profesional, directo y técnico. Evita saludos largos. Ve al grano.
+        3. FORMATO: Usa Markdown. Negritas (**texto**) para nombres y métricas clave. Listas para pasos a seguir.
+        4. ALCANCE: Si te preguntan algo fuera de TI o gestión de tickets, responde: "Como asesor de Smart-IT Ops, solo puedo asistir en temas de infraestructura y gestión de tickets."
+
+        TAREA ACTUAL:
+        Analiza la siguiente consulta del usuario y responde basándote en la carga de trabajo arriba mencionada.
         """
 
-        full_prompt = f"{system_instruction}\n\nPREGUNTA DEL USUARIO: {user_query}"
+        # 3. Ensamblaje final
+        full_prompt = f"{system_prompt}\n\nUSUARIO: {user_query}"
 
         try:
-            response = self.model.generate_content(full_prompt)
+            # Generación con temperatura baja para respuestas más deterministas y menos "creativas"
+            response = self.model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.3,
+                )
+            )
             return response.text
         except Exception as e:
-            return f"⚠️ Error al consultar al Asesor IA: {str(e)}"
+            return f"⚠️ Error de conexión con el cerebro IA: {str(e)}"
