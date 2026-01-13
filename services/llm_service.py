@@ -6,27 +6,47 @@ class ITAdvisorService:
         genai.configure(api_key=GOOGLE_API_KEY)
         self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
-    def get_recommendation(self, user_query: str, context_data: dict) -> str:
+    def get_recommendation(self, user_query: str, 
+                           workload_data: dict,
+                           specific_ticket_info: str = "") -> str:
         """
         Genera una respuesta consultiva basada en la carga de trabajo actual.
         """
 
-        # 1. Preparación del Contexto (Data Injection)
+        # CONTEXTO 1
         # Convertimos el diccionario a un formato de texto claro para el LLM
-        workload_context = "\n".join([f"- {tech}: {count} tickets" for tech, count in context_data.items()])
+        workload_data = "\n".join([f"- {tech}: {count} tickets" for tech, count in workload_data.items()])
         
-        if not workload_context:
-            workload_context = "No hay tickets activos actualmente."
+        if not workload_data:
+            workload_data = "No hay tickets activos actualmente."
         
-        # 2. Construcción del System Prompt (Arquitectura del Pensamiento)
+        # CONTEXTO 2
+        ticket_context_section = ""
+        if specific_ticket_info:
+            ticket_context_section = f"""
+            NFORMACIÓN ESPECÍFICA DE LOS TICKETS RELEVANTES:
+            ------------------------------------------------------------
+            {specific_ticket_info}
+            ------------------------------------------------------------
+            """
+        
+        # Construcción del System Prompt (Arquitectura del Pensamiento)
         system_prompt = f"""
-        ROLES Y OBJETIVOS:
-        Actúa como "Smart-IT Ops", un Arquitecto de Operaciones TI Senior. Tu objetivo es optimizar la eficiencia del equipo de soporte basándote EXCLUSIVAMENTE en los datos proporcionados.
-        
+        ERES: Smart-IT Ops, Tech Lead virtual.
+        OBJETIVO: Ayudar a asignar tickets y gestionar infraestructura.
         CONTEXTO OPERATIVO ACTUAL (Carga de Trabajo en Tiempo Real):
         ------------------------------------------------------------
-        {workload_context}
+        CONEXTO DE CARGA DE TRABAJO: 
+        {workload_data}
+
+        {ticket_context_section}
         ------------------------------------------------------------
+
+        INSTRUCCIONES:
+        1. Si hay información de un ticket específico ("INFORMACIÓN ESPECÍFICA"), úsala para recomendar al mejor técnico basándote en la descripción del problema y quién tiene menos carga.
+        2. Si el ticket trata de redes, sugieres al experto en redes (si lo deduces) o al que tenga menos tickets.
+        3. Mantén la seguridad: CENSURA IPs o PASSWORDS detectados.
+        4. Sé breve y directivo. Ejemplo: "Asigna el ticket #505 a Ana, ya que es un problema de impresión y ella tiene baja carga (2 tickets)."
 
         PROTOCOLOS DE SEGURIDAD (MÁXIMA PRIORIDAD):
         1. FILTRADO DE DATOS: Si el usuario ingresa IPs, Contraseñas, Hashes o Nombres completos de clientes (PII), NO los repitas. Refiérete a ellos como "[DATO REDACTADO]" o ignóralos.

@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from data.repository import TicketRepository
 from services.llm_service import ITAdvisorService
+import re
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
@@ -73,7 +74,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Input de usuario
-if prompt := st.chat_input("Consulta sobre asignaciones o estado de la infraestructura..."):
+if prompt := st.chat_input("Ej: ¿A quién asigno el ticket #102?"):
     # 1. Mostrar mensaje usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -81,11 +82,40 @@ if prompt := st.chat_input("Consulta sobre asignaciones o estado de la infraestr
 
     # 2. Generar respuesta
     with st.chat_message("assistant"):
-        with st.spinner("Analizando carga operativa..."):
-            # Obtenemos datos frescos para cada consulta
+        with st.spinner("Analizando ticket y carga..."):
+            # --- LÓGICA DE DETECCIÓN DE CONTEXTO ---
+            
+            # 1. Obtenemos carga base
             current_workload = repo.get_team_workload()
-            response = llm_service.get_recommendation(prompt, current_workload)
-            st.markdown(response)
-    
-    # 3. Guardar historial
-    st.session_state.messages.append({"role": "assistant", "content": response})
+            
+            # 2. Detectamos si el usuario menciona un ID (ej: "#123" o "ticket 500")
+            # Regex busca: simbolo # seguido de numeros O palabra ticket espacio numero
+            ticket_pattern = r'(?:#|ticket|id|caso)\s*:?\s*(\d+)'
+            ticket_match = re.search(ticket_pattern, prompt, re.IGNORECASE)
+            
+            specific_info = ""
+            
+            if ticket_match:
+                # Si encontró un ID, buscamos el detalle
+                ticket_id = ticket_match.group(1)
+                st.toast(f"🔍 Analizando detalles ticket ID {ticket_id}...", icon="🤖")
+                specific_info = repo.get_ticket_details(ticket_id)
+            else:
+                # Si NO menciona un ID especifico, le damos contexto de los "Sin Asignar"
+                # por si pregunta "¿Qué tengo pendiente?"
+                specific_info = "COLA DE PENDIENTES:\n" + repo.get_unassigned_tickets()
+
+            # --- LLAMADA AL LLM ---
+            try:
+                response = llm_service.get_recommendation(
+                    user_query=prompt, 
+                    workload_data=current_workload,
+                    specific_ticket_info=specific_info
+                )
+                
+                st.markdown(response)
+
+                #Guardar respuesta en historial
+                st.session_state.messages.append({"role": "assistant", "content": response})
+            except Exception as e:
+                st.error(f"🛑 Error en el servicio de IA: {e}")
