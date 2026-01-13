@@ -11,6 +11,8 @@ Asistente basado en IA para infraestructura TI, diseñado para analizar cargas d
 ## 🚀 Instalación y Despliegue (Windows)
 
 ### 1. Preparar el Entorno
+
+#### Windows
 Abrir PowerShell en la carpeta raíz del proyecto:
 
 ```powershell
@@ -25,8 +27,23 @@ pip install -r requirements.txt
 
 # Desactivar entorno (Windows)
 deactivate
-
 ```
+
+#### Ubuntu
+```powershell
+# Crear entorno virtual
+python3 -m venv venv
+
+# Activar entorno (ubuntu)
+source venv/bin/activate
+
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Desactivar entorno (ubuntu)
+deactivate
+```
+
 ## ⚙️ Configuración de Variables de Entorno (.env)
 
 El archivo .env actúa como una "caja fuerte" que guarda sus claves secretas y preferencias locales.
