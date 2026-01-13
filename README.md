@@ -86,7 +86,7 @@ graph TD
         Admin("Admin TI")
     end
 
-    subgraph "AWS EC2 - Tu VM Ubuntu"
+    subgraph "Entorno Virtual o VM"
         direction TB
         CSV[("📂 data/tickets.csv")]
         Env{".env API Keys"}
