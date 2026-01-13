@@ -133,7 +133,7 @@ python test_models.py
 streamlit run app.py
 ```
 
-## 🏗️ Arquitectura de la Solución
+# 🏗️ Arquitectura de la Solución
 
 El siguiente diagrama ilustra el flujo de datos entre el usuario, la capa lógica en AWS y el servicio de IA.
 
@@ -182,3 +182,15 @@ graph TD
     Service -->|9. Texto Procesado| Logic
     Logic -->|10. Mostrar Respuesta| UI
 ```
+
+# Pruebas de uso LLM
+
+*Prompt:* "Recomienda un técnico para el id [ID_REAL]"
+
+*Prompt:* "Analiza el ticket #[ID_REAL] y dime qué habilidades técnicas necesita el técnico para resolverlo."
+
+*Prompt:* ""Tengo un ticket de mantenimiento general muy sencillo. ¿A quién debería asignárselo para no sobrecargar al equipo?""
+
+*Prompt:* "Asigna el ticket #[ID_DE_REDES]. Es urgente."
+
+*Prompt:* "Si llega un ticket crítico sobre caída del Firewall, ¿quién es el más apto para verlo según la carga actual?"
