@@ -94,13 +94,13 @@ class TicketRepository:
         
         # Buscar ID exacto
         target_id = str(ticket_id).strip()
-        ticket = df[df['ID'] == target_id]
+        ticket = df[df['ID'] == target_id].fillna("Sin Asignar")
         
         if ticket.empty:
             # DEBUG: Si falla, mostramos qué IDs existen realmente (los primeros 3)
             available_ids = df['ID'].head(3).tolist()
             return f"❌ No encontré el ticket ID '{target_id}'. IDs visibles en el sistema (ejemplos): {available_ids}"
-            
+        
         row = ticket.iloc[0]
         # Construimos una ficha técnica del ticket
         details = f"""
