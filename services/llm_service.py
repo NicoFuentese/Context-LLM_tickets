@@ -1,78 +1,107 @@
 import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from config.settings import GOOGLE_API_KEY
+
+# Configuración Global
+genai.configure(api_key=GOOGLE_API_KEY)
 
 class ITAdvisorService:
     def __init__(self):
-        genai.configure(api_key=GOOGLE_API_KEY)
-        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
-
-    def get_recommendation(self, user_query: str, 
-                           workload_data: dict,
-                           specific_ticket_info: str = "") -> str:
-        """
-        Genera una respuesta consultiva basada en la carga de trabajo actual.
-        """
-
-        # CONTEXTO 1
-        # Convertimos el diccionario a un formato de texto claro para el LLM
-        workload_data = "\n".join([f"- {tech}: {count} tickets" for tech, count in workload_data.items()])
+        # CONFIGURACIÓN TÉCNICA (Pilar de Precisión)
+        # temperature=0.2: Baja creatividad, alta fidelidad a los datos. Ideal para manuales técnicos.
+        self.generation_config = genai.types.GenerationConfig(
+            temperature=0.2,
+            max_output_tokens=1024,
+        )
         
-        if not workload_data:
-            workload_data = "No hay tickets activos actualmente."
-        
-        # CONTEXTO 2
-        ticket_context_section = ""
-        if specific_ticket_info:
-            ticket_context_section = f"""
-            NFORMACIÓN ESPECÍFICA DE LOS TICKETS RELEVANTES:
-            ------------------------------------------------------------
-            {specific_ticket_info}
-            ------------------------------------------------------------
-            """
-        
-        # Construcción del System Prompt (Arquitectura del Pensamiento)
-        system_prompt = f"""
-        ERES: Smart-IT Ops, Tech Lead virtual.
-        OBJETIVO: Ayudar a asignar tickets y gestionar infraestructura.
-        CONTEXTO OPERATIVO ACTUAL (Carga de Trabajo en Tiempo Real):
-        ------------------------------------------------------------
-        CONEXTO DE CARGA DE TRABAJO: 
-        {workload_data}
+        # CONFIGURACIÓN DE SEGURIDAD (Pilar de Privacidad)
+        # Bloqueamos contenido peligroso o de odio, pero permitimos algo de flexibilidad para términos técnicos
+        self.safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        }
 
-        {ticket_context_section}
-        ------------------------------------------------------------
+        self.model = genai.GenerativeModel(
+            model_name='gemini-2.5-flash-lite',
+            generation_config=self.generation_config,
+            safety_settings=self.safety_settings
+        )
+    
+    def _format_history_for_gemini(self, streamlit_history):
+        """
+        Convierte el historial de Streamlit (dict) al formato que espera Gemini.
+        Streamlit: [{'role': 'user', 'content': 'hola'}]
+        Gemini:    [{'role': 'user', 'parts': ['hola']}]
+        """
+        gemini_history = []
+        for msg in streamlit_history:
+            # Ignoramos mensajes de sistema o errores si los hubiera guardado
+            if msg["role"] in ["user", "model", "assistant"]:
+                role = "model" if msg["role"] == "assistant" else "user"
+                gemini_history.append({
+                    "role": role,
+                    "parts": [msg["content"]]
+                })
+        return gemini_history
 
-        INSTRUCCIONES:
-        1. Si hay información de un ticket específico ("INFORMACIÓN ESPECÍFICA"), úsala para recomendar al mejor técnico basándote en la descripción del problema y quién tiene menos carga.
-        2. Si el ticket trata de redes, sugieres al experto en redes (si lo deduces) o al que tenga menos tickets.
-        3. Mantén la seguridad: CENSURA IPs o PASSWORDS detectados.
-        4. Sé breve y directivo. Ejemplo: "Asigna el ticket #505 a Ana, ya que es un problema de impresión y ella tiene baja carga (2 tickets)."
+    def get_system_prompt(self, workload_context: str, rag_context: str) -> str:
+        """
+        Prompt de Ingeniería avanzado para roles técnicos.
+        """
+        base_prompt = f"""
+        ACTÚA COMO: Un Arquitecto de Soluciones TI Senior y SysAdmin experto (Nivel 3).
+        TONO: Profesional, técnico, conciso y orientado a la resolución de problemas.
 
-        PROTOCOLOS DE SEGURIDAD (MÁXIMA PRIORIDAD):
-        1. FILTRADO DE DATOS: Si el usuario ingresa IPs, Contraseñas, Hashes o Nombres completos de clientes (PII), NO los repitas. Refiérete a ellos como "[DATO REDACTADO]" o ignóralos.
-        2. ALERTA: Si detectas credenciales, añade al final de tu respuesta: "⚠️ Nota: He detectado credenciales en tu consulta. Por favor, recuerda no compartir secretos en este chat."
+        FUENTES DE CONOCIMIENTO (Prioridad Máxima):
+        A continuación se presentan extractos de la DOCUMENTACIÓN OFICIAL de la empresa (RAG).
+        Úsalos para responder. Si la respuesta está aquí, cítala explícitamente.
+        --- INICIO DOCUMENTACIÓN RAG ---
+        {rag_context}
+        --- FIN DOCUMENTACIÓN RAG ---
 
-        REGLAS DE RESPUESTA:
-        1. DATA-DRIVEN: No des opiniones vagas. Usa los números del contexto. Ejemplo: "Recomiendo a Juan (2 tickets) sobre Pedro (15 tickets)".
-        2. TONO: Profesional, directo y técnico. Evita saludos largos. Ve al grano.
-        3. FORMATO: Usa Markdown. Negritas (**texto**) para nombres y métricas clave. Listas para pasos a seguir.
-        4. ALCANCE: Si te preguntan algo fuera de TI o gestión de tickets, responde: "Como asesor de Smart-IT Ops, solo puedo asistir en temas de infraestructura y gestión de tickets."
+        CONTEXTO OPERATIVO (Estado actual del equipo):
+        {workload_context}
 
-        TAREA ACTUAL:
-        Analiza la siguiente consulta del usuario y responde basándote en la carga de trabajo arriba mencionada.
+        REGLAS DE COMPORTAMIENTO (OBLIGATORIAS):
+        1. HONESTIDAD RADICAL: Si la información no está en la documentación RAG ni en tu conocimiento general confiable, di: "No encuentro información específica en los protocolos sobre este tema". NO INVENTES COMANDOS NI PROCEDIMIENTOS.
+        2. SEGURIDAD: Si el usuario pega credenciales, IPs privadas o PII, IGNÓRALAS en tu respuesta y advierte sobre seguridad.
+        3. FORMATO: Usa Markdown. Pon el código o comandos siempre en bloques de código (```bash).
+        4. CITA DE FUENTES: Si usas info del RAG, indica: "Según el protocolo [Nombre archivo]...".
         """
 
-        # 3. Ensamblaje final
-        full_prompt = f"{system_prompt}\n\nUSUARIO: {user_query}"
+        return base_prompt
 
+    def ask_advisor(self, user_question: str, workload_dict: dict, rag_context: str = "",  chat_history: list = []) -> str:
         try:
-            # Generación con temperatura baja para respuestas más deterministas y menos "creativas"
-            response = self.model.generate_content(
-                full_prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.3,
-                )
-            )
+            # 1. Preparar contextos
+            workload_str = "\n".join([f"- {k}: {v} tickets activos" for k, v in workload_dict.items()])
+            
+            # 2. Generar System Prompt Dinámico
+            system_instruction = self.get_system_prompt(workload_str, rag_context)
+            
+            # 3. Preparar Historial (Memoria de corto plazo)
+            # Nota: Gemini Pro no tiene un parámetro 'system_prompt' directo en start_chat en todas las versiones SDK,
+            # pero podemos inyectarlo en el primer mensaje o usar la historia.
+            # Estrategia Híbrida: Enviamos el system prompt como "instrucción oculta" junto con la pregunta actual
+            # para no ensuciar el historial pasado o confundir al modelo con contextos viejos.
+            
+            formatted_history = self._format_history_for_gemini(chat_history)
+            
+            # Iniciamos chat con la historia previa
+            chat = self.model.start_chat(history=formatted_history)
+            
+            # 4. Construir el mensaje final (Contexto + Pregunta)
+            full_message = f"{system_instruction}\n\nPREGUNTA DEL OPERADOR: {user_question}"
+            
+            # 5. Enviar
+            response = chat.send_message(full_message)
             return response.text
+
         except Exception as e:
-            return f"⚠️ Error de conexión con el cerebro IA: {str(e)}"
+            return f"⚠️ Error en el servicio cognitivo (LLM): {str(e)}"
+
+
+
+

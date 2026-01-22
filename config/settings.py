@@ -8,6 +8,7 @@ load_dotenv()
 # Rutas Base (Pathlib maneja automáticamente las barras invertidas de Windows)
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
+TICKETS_FILE = DATA_DIR / "tickets.csv"
 
 # Configuración de Archivos
 CSV_FILENAME = os.getenv("GLPI_CSV_FILENAME", "tickets.csv")

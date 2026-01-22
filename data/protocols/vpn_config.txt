@@ -1,0 +1,4 @@
+PROTOCOLO DE ACCESO VPN - ACTUALIZADO 2026
+Para conectarse a la VPN Corporativa, NO se debe usar el puerto estándar 443.
+Debido a nuevas políticas de seguridad, el puerto obligatorio es el 9999.
+Además, el usuario debe saludar al SysAdmin antes de loguearse.
