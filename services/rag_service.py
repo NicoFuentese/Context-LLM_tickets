@@ -54,7 +54,6 @@ class KnowledgeBaseService:
         )
 
     def _extract_text_from_pdf(self, file_path):
-        """Función auxiliar para extraer texto de PDFs."""
         text = ""
         try:
             reader = pypdf.PdfReader(file_path)
@@ -67,19 +66,59 @@ class KnowledgeBaseService:
             print(f"Error leyendo PDF {file_path}: {e}")
             return ""
 
+    def _smart_chunking(self, text, chunk_size=1000, overlap=200):
+        """
+        Divide el texto respetando frases y manteniendo contexto (Overlap).
+        """
+        if not text:
+            return []
+            
+        chunks = []
+        start = 0
+        text_len = len(text)
+
+        while start < text_len:
+            end = start + chunk_size
+            
+            # Si no estamos al final, intentamos buscar el último punto o salto de línea
+            # para no cortar una frase a la mitad.
+            if end < text_len:
+                # Buscar el último punto '.' en el rango del chunk
+                last_period = text.rfind('.', start, end)
+                if last_period != -1 and last_period > start + (chunk_size * 0.5):
+                    end = last_period + 1 # Cortar después del punto
+                else:
+                    # Si no hay punto, buscar salto de línea
+                    last_newline = text.rfind('\n', start, end)
+                    if last_newline != -1 and last_newline > start + (chunk_size * 0.5):
+                        end = last_newline + 1
+            
+            # Extraer el chunk y limpiar espacios extra
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            
+            # Avanzar, pero retrocediendo el 'overlap' para mantener contexto
+            # (Solo si no hemos llegado al final)
+            start = end - overlap if end < text_len else end
+            
+        return chunks
+
     def ingest_protocols(self):
         if not PROTOCOLS_DIR.exists():
             os.makedirs(PROTOCOLS_DIR)
             return "Carpeta creada."
 
-        # Aceptamos .pdf ahora
         files = [f for f in os.listdir(PROTOCOLS_DIR) if f.endswith(('.txt', '.md', '.pdf'))]
         
         if not files:
-            return "⚠️ No hay archivos soportados (.txt, .md, .pdf)."
+            return "⚠️ No hay archivos soportados."
 
         self.client.delete_collection("it_protocols")
-        self.collection = self.client.get_or_create_collection(name="it_protocols", embedding_function=self.embedding_fn)
+        self.collection = self.client.get_or_create_collection(
+            name="it_protocols", 
+            embedding_function=self.embedding_fn
+        )
 
         total_chunks = 0
         
@@ -87,19 +126,18 @@ class KnowledgeBaseService:
             file_path = PROTOCOLS_DIR / filename
             text = ""
             
-            # LÓGICA DE EXTRACCIÓN SEGÚN TIPO
             if filename.endswith('.pdf'):
                 text = self._extract_text_from_pdf(file_path)
             else:
-                # Lógica existente para txt/md
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     text = f.read()
             
             if not text.strip():
-                continue # Saltar archivos vacíos o ilegibles
+                continue
 
-            # Chunking (Simplificado por longitud)
-            chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
+            # --- USO DEL NUEVO CHUNKING INTELIGENTE ---
+            chunks = self._smart_chunking(text, chunk_size=1000, overlap=200)
+            # ------------------------------------------
             
             ids = [f"{filename}_{i}" for i in range(len(chunks))]
             metadatas = [{"source": filename} for _ in range(len(chunks))]
@@ -108,7 +146,7 @@ class KnowledgeBaseService:
                 self.collection.add(documents=chunks, ids=ids, metadatas=metadatas)
                 total_chunks += len(chunks)
         
-        return f"✅ Indexación completada: {total_chunks} fragmentos (incluyendo PDFs) procesados."
+        return f"✅ Indexación Inteligente: {total_chunks} fragmentos generados (con Overlap)."
 
     def search_context(self, query: str, n_results: int = 25) -> str:
         """Busca los fragmentos más relevantes para la pregunta."""
