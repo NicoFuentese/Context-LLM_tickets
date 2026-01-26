@@ -40,9 +40,16 @@ def main():
             with st.spinner("Leyendo y vectorizando documentos..."):
                 result = kb_service.ingest_protocols()
             st.success(result)
+    
+        # Obtener tickets sin asignar
+        try:
+            unassigned_list = repo.get_unassigned_tickets(limit=30)
+            st.metric("Tickets Sin Asignar", len(unassigned_list) if unassigned_list else 0)
+        except Exception:
+            unassigned_list = []
             
         st.divider()
-        # (Código existente de métricas de carga...)
+
         try:
             workload = repo.get_team_workload()
             st.subheader("Carga Equipo")
@@ -64,16 +71,17 @@ def main():
         st.chat_message("user").write(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("🔍 Consultando protocolos y analizando..."):
+            with st.spinner("Analizando carga, especialidades y protocolos..."):
                 # 1. RAG: Buscar contexto relevante en documentos
-                rag_context = kb_service.search_context(prompt)
+                rag_context = kb_service.search_context(prompt, n_results=25)
                 
                 # 2. LLM: Enviar todo a Gemini
                 response = advisor.ask_advisor(
                     user_question=prompt,
                     workload_dict=workload,
                     rag_context=rag_context,
-                    chat_history=st.session_state.messages
+                    chat_history=st.session_state.messages,
+                    unassigned_tickets=unassigned_list
                 )
                 
                 st.write(response)
@@ -87,3 +95,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#Analiza los tickets sin asignar y recomiéndame asignaciones.

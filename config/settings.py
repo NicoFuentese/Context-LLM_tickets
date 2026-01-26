@@ -19,3 +19,14 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
     raise ValueError("❌ CRÍTICO: No se encontró GOOGLE_API_KEY en el archivo .env")
+
+# fortalezas de cada técnico para que la IA sepa a quién elegir.
+TECH_SPECIALTIES = {
+    "Eduardo Francisco Zamora Gonzalez": ["Redes", "Cisco", "Hardware", "Cableado"],
+    "Jose Manuel Carrasco Gonzalez": ["Bases de Datos", "SQL", "Oracle", "SAP Nivel 1"],
+    "Fernando Adrian Silva Leon": ["Soporte Usuario", "Office 365", "Impresoras", "Windows"],
+    "Italo Joshua Toro Sepulveda": ["Servidores", "Linux", "Virtualización", "VMware"],
+    "Gonzalo Alejandro Tobar Ramirez": ["Ciberseguridad", "Firewall", "VPN", "Auditoría"],
+    # Fallback para nombres nuevos
+    "Sin Asignar": ["N/A"]
+}
