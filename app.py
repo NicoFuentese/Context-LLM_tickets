@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 from data.repository import TicketRepository
-from services.llm_service_gemini import ITAdvisorService
-import re
+from services.llm_service import ITAdvisorService
 from services.classifier_service import TicketClassifierService
+from services.rag_service import KnowledgeBaseService # <-- NUEVO
+import re
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
@@ -18,11 +19,9 @@ def get_services():
     try:
         repo = TicketRepository()
         llm = ITAdvisorService()
-        
-        # 1️⃣ NUEVO: Inicializamos tu motor SVM aquí para que se cargue una sola vez
-        classifier = TicketClassifierService() 
-        
-        return repo, llm, classifier
+        classifier = TicketClassifierService()
+        kb = KnowledgeBaseService() # <-- NUEVO
+        return repo, llm, classifier, kb
     except FileNotFoundError as e:
         st.error(f"🛑 {e}")
         st.stop()
@@ -30,8 +29,8 @@ def get_services():
         st.error(f"🛑 Error crítico de inicialización: {e}")
         st.stop()
 
-# 2️⃣ NUEVO: Desempaquetamos el classifier_service
-repo, llm_service, classifier_service = get_services()
+# Desempaquetamos los 4 servicios
+repo, llm_service, classifier_service, kb_service = get_services()
 
 # --- SIDEBAR: ESTADO DEL SISTEMA ---
 with st.sidebar:
@@ -57,6 +56,16 @@ with st.sidebar:
     except Exception as e:
         st.error(f"Error calculando métricas: {e}")
 
+    st.divider()
+    
+    # --- BOTÓN DE RAG ---
+    st.subheader("📚 Base de Conocimiento")
+    if st.button("🔄 Re-indexar PDFs", use_container_width=True, help="Usa esto si subiste nuevos manuales o si cambiaste de modelo de embeddings."):
+        with st.spinner("Leyendo y vectorizando manuales en local..."):
+            resultado = kb_service.ingest_protocols()
+            st.success(resultado)
+    # -------------------
+            
     st.divider()
     st.info("💡 **Tip:** Exporta un nuevo CSV desde GLPi para actualizar estas métricas.")
 
@@ -88,7 +97,7 @@ if prompt := st.chat_input("Ej: ¿A quién asigno el ticket #102?"):
 
     # 2. Generar respuesta
     with st.chat_message("assistant"):
-        with st.spinner("Analizando ticket, modelos predictivos y carga..."):
+        with st.spinner("Analizando ticket, modelos predictivos, manuales y carga..."):
             # --- LÓGICA DE DETECCIÓN DE CONTEXTO ---
             
             # 1. Obtenemos carga base
@@ -106,26 +115,37 @@ if prompt := st.chat_input("Ej: ¿A quién asigno el ticket #102?"):
                 st.toast(f"🔍 Analizando detalles ticket ID {ticket_id}...", icon="🤖")
                 specific_info = repo.get_ticket_details(ticket_id)
                 
-                # 3️⃣ NUEVO: INTERCEPTOR SVM
-                # Pasamos la info del ticket por tu modelo entrenado
+                # --- INTERCEPTOR SVM ---
                 prediccion = classifier_service.analizar_ticket(titulo=specific_info)
-                
-                # Inyectamos el resultado de la SVM al texto que leerá Gemini
                 etiqueta_svm = f"\n\n🤖 [ANÁLISIS SVM]:\n- Categoría Predicha: {prediccion['categoria']}\n- Confianza: {prediccion['confianza']}%\n- Sugerencia del Motor: {prediccion['accion']}"
-                
                 specific_info = specific_info + etiqueta_svm
-                # ----------------------------------------
+                # -----------------------
                 
             else:
-                # Si NO menciona un ID especifico, le damos contexto de los "Sin Asignar"
-                specific_info = "COLA DE PENDIENTES:\n" + repo.get_unassigned_tickets()
+                # 1. Obtenemos la lista de tickets
+                tickets_pendientes = repo.get_unassigned_tickets(limit=10)
+                
+                # 2. Convertimos la lista en texto
+                texto_pendientes = ""
+                if isinstance(tickets_pendientes, list):
+                    for t in tickets_pendientes:
+                        texto_pendientes += f"- ID: {t.get('id', 'N/A')} | Título: {t.get('titulo', 'N/A')}\n"
+                else:
+                    texto_pendientes = str(tickets_pendientes) # Por si acaso el repo aún devuelve texto
+                    
+                specific_info = "COLA DE PENDIENTES:\n" + texto_pendientes
 
-            # --- LLAMADA AL LLM ---
+            # --- LLAMADA AL LLM (CON RAG INTEGRADO) ---
             try:
+                # 🟢 BÚSQUEDA RAG: Buscamos en los manuales
+                query_para_rag = specific_info if specific_info else prompt
+                rag_info = kb_service.search_context(query_para_rag)
+
                 response = llm_service.get_recommendation(
                     user_query=prompt, 
                     workload_data=current_workload,
-                    specific_ticket_info=specific_info
+                    specific_ticket_info=specific_info,
+                    rag_context=rag_info # <--- Inyectamos el conocimiento al cerebro
                 )
                 
                 st.markdown(response)

@@ -10,3 +10,5 @@ chromadb==0.4.22
 joblib>=1.0.0
 scikit-learn
 boto3>=1.28.0
+
+sentence-transformers

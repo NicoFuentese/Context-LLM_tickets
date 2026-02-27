@@ -58,7 +58,7 @@ class ITAdvisorService:
         - 💡 **Razón:** "[Nombre] es del área [Área] y actualmente tiene una carga baja de [X] tickets."
         """
 
-    def get_recommendation(self, user_query: str, workload_data: dict, specific_ticket_info: str = "") -> str:
+    def get_recommendation(self, user_query: str, workload_data: dict, specific_ticket_info: str = "", rag_context: str = "") -> str:
         try:
             # 1. Preparar texto de carga laboral actual
             workload_str = "\n".join([f"- {tecnico}: {cantidad} tickets activos" for tecnico, cantidad in workload_data.items()])
@@ -70,6 +70,10 @@ class ITAdvisorService:
             full_query = user_query
             if specific_ticket_info:
                 full_query += f"\n\n--- DETALLES DEL TICKET A ANALIZAR ---\n{specific_ticket_info}"
+
+            #Inyectamos el conocimiento del manual para que DeepSeek lo lea
+            if rag_context:
+                full_query += f"\n{rag_context}"
 
             # 4. Llamada a AWS Bedrock (DeepSeek R1)
             response = self.aws_client.converse(
