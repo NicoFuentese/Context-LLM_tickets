@@ -1,114 +1,95 @@
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-from config.settings import GOOGLE_API_KEY, TECH_SPECIALTIES
-
-# Configuración Global
-genai.configure(api_key=GOOGLE_API_KEY)
+import os
+import boto3
+from dotenv import load_dotenv
 
 class ITAdvisorService:
     def __init__(self):
-        # CONFIGURACIÓN TÉCNICA (Pilar de Precisión)
-        # temperature=0.2: Baja creatividad, alta fidelidad a los datos. Ideal para manuales técnicos.
-        self.generation_config = genai.types.GenerationConfig(
-            temperature=0.2,
-            max_output_tokens=2048, #aumento para respuesta mas detallada
-        )
+        # Cargamos las credenciales de AWS desde tu .env
+        load_dotenv()
+        self.aws_region = os.getenv("AWS_REGION", "us-east-1")
+        self.model_id = os.getenv("DEEPSEEK_MODEL_ID") 
         
-        # CONFIGURACIÓN DE SEGURIDAD (Pilar de Privacidad)
-        # Bloqueamos contenido peligroso o de odio, pero permitimos algo de flexibilidad para términos técnicos
-        self.safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+        try:
+            self.aws_client = boto3.client(
+                service_name='bedrock-runtime',
+                region_name=self.aws_region,
+                aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+            )
+            print("✅ LLM Service Principal: Conectado a AWS Bedrock (DeepSeek R1).")
+        except Exception as e:
+            print(f"❌ Error conectando LLM a AWS Bedrock: {e}")
+
+        # Matriz de expertos (copiada de tu lógica de negocio)
+        self.mapa_expertos = {
+            "DBA": ["Orieta Catalan", "Cesar Milko Lazo", "Gonzalo Alejandro Tobar"],
+            "Ingenieros TI": ["Jean Franco Andre Miranda", "Claudio Daniel Aliste", "Rodrigo Andres Jara", "Rodrigo Aravena", "Jesus Ayala"],
+            "Ciberseguridad": ["Jose Ignacio Mayea", "Ricchard Mancilla"],
+            "Aplicaciones": ["Gabriel Natan Pizarro", "Luis Eduardo Villagra", "Reinaldo Zuniga", "Christian Miguel Hevia", "Veronica Paz Ramirez"],
+            "ABM": ["Josefa Ignacia Lohaus"]
         }
 
-        self.model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash-lite',
-            generation_config=self.generation_config,
-            safety_settings=self.safety_settings
-        )
-    
-    def _format_history_for_gemini(self, streamlit_history):
-        """
-        Convierte el historial de Streamlit (dict) al formato que espera Gemini.
-        Streamlit: [{'role': 'user', 'content': 'hola'}]
-        Gemini:    [{'role': 'user', 'parts': ['hola']}]
-        """
-        gemini_history = []
-        for msg in streamlit_history:
-            # Ignoramos mensajes de sistema o errores si los hubiera guardado
-            if msg["role"] in ["user", "model", "assistant"]:
-                role = "model" if msg["role"] == "assistant" else "user"
-                gemini_history.append({
-                    "role": role,
-                    "parts": [msg["content"]]
-                })
-        return gemini_history
-
-    def get_system_prompt(self, workload_context: str, rag_context: str) -> str:
-        """
-        Prompt de Ingeniería avanzado para roles técnicos.
-        """
-
-        # Convertimos el diccionario de skills a texto legible
-        skills_str = "\n".join([f"- {name}: {', '.join(skills)}" for name, skills in TECH_SPECIALTIES.items()])
-
-        base_prompt = f"""
-        ROL: Eres el Tech Lead y Arquitecto de 'Smart-IT Ops'.
+    def get_system_prompt(self, workload_context: str) -> str:
+        # Convertimos el diccionario a un texto que la IA entienda
+        skills_str = "\n".join([f"- {area}: {', '.join(nombres)}" for area, nombres in self.mapa_expertos.items()])
         
-        TU SUPERPODER: Asignar tickets inteligentemente buscando el equilibrio perfecto entre:
-        1. **Especialidad:** ¿Quién sabe más del tema? (Prioridad Alta)
-        2. **Carga Laboral:** ¿Quién está más libre? (Prioridad Media)
+        return f"""
+        ROL: Eres el Tech Lead y Arquitecto de la Mesa de Ayuda 'Smart-IT Ops'.
         
-        --- MATRIZ DE EXPERTOS (Técnico: Habilidades) ---
+        TU SUPERPODER: Asignar tickets inteligentemente buscando el equilibrio perfecto entre Especialidad y Carga Laboral.
+        
+        --- MATRIZ DE EXPERTOS (Área: Nombres) ---
         {skills_str}
 
         --- CARGA DE TRABAJO ACTUAL (Tickets Activos) ---
         {workload_context}
-        
-        --- CONOCIMIENTO TÉCNICO (RAG) ---
-        {rag_context}
 
         INSTRUCCIONES PARA ASIGNACIÓN:
-        Cuando el usuario pregunte por tickets sin asignar o pida recomendaciones:
-        1. Analiza el "Título" y "Descripción" del ticket para detectar el tema (ej: Base de Datos, Redes).
-        2. Busca en la Matriz de Expertos quién es el más apto.
-        3. Verifica su Carga de Trabajo.
-           - Si el experto está saturado (>5 tickets), busca al siguiente más apto o al que tenga menos carga (Generalista).
-           - Si el experto está libre, asígnaselo sin dudar.
-        4. **FORMATO DE RESPUESTA:**
-           - 🎫 **Ticket [ID]:** [Título]
-           - 👉 **Sugerencia:** Asignar a **[Nombre Técnico]**.
-           - 💡 **Razón:** "[Nombre] es experto en [Skill] y tiene carga baja/media..." o "Aunque [Nombre] está ocupado, es el único experto en..."
+        1. Lee los detalles del ticket. Fíjate especialmente en el "[ANÁLISIS SVM]" que viene adjunto.
+        2. Si la sugerencia del Motor es "SVM (Auto-Asignar)" o "Clasificado por DeepSeek", CONFÍA ciegamente en esa categoría.
+        3. Busca en la Matriz de Expertos quién pertenece a esa categoría.
+        4. Revisa la Carga de Trabajo Actual y elige al experto de esa área que tenga MENOS tickets asignados.
+        5. Justifica tu decisión brevemente.
 
-        REGLAS DE SEGURIDAD:
-        - No inventes nombres que no estén en la lista.
-        - Si no hay información suficiente, sugiere "Investigar primero".
+        FORMATO DE RESPUESTA REQUERIDO:
+        - 🎫 **Ticket:** [Título]
+        - 🏷️ **Categoría Final:** [Categoría detectada]
+        - 👉 **Asignar a:** **[Nombre del Técnico]**
+        - 💡 **Razón:** "[Nombre] es del área [Área] y actualmente tiene una carga baja de [X] tickets."
         """
 
-        return base_prompt
-
-    def ask_advisor(self, user_question: str, workload_dict: dict, rag_context: str = "", chat_history: list = [], unassigned_tickets: list = []) -> str:
+    def get_recommendation(self, user_query: str, workload_data: dict, specific_ticket_info: str = "") -> str:
         try:
-            workload_str = "\n".join([f"- {k}: {v} tickets" for k, v in workload_dict.items()])
+            # 1. Preparar texto de carga laboral actual
+            workload_str = "\n".join([f"- {tecnico}: {cantidad} tickets activos" for tecnico, cantidad in workload_data.items()])
             
-            # Si hay tickets sin asignar y la pregunta parece sobre asignación, los inyectamos en el contexto
-            unassigned_context = ""
-            if unassigned_tickets and ("asignar" in user_question.lower() or "pendientes" in user_question.lower()):
-                unassigned_context = "\nTICKETS SIN ASIGNAR DETECTADOS:\n" + "\n".join(
-                    [f"ID: {t['id']} | Título: {t['titulo']} | Desc: {t['descripcion']}" for t in unassigned_tickets]
-                )
-                # Añadimos esto a la pregunta del usuario para que el LLM lo vea
-                user_question = f"{user_question}\n\n{unassigned_context}"
+            # 2. Generar instrucciones del sistema
+            system_instruction = self.get_system_prompt(workload_str)
 
-            system_instruction = self.get_system_prompt(workload_str, rag_context)
-            formatted_history = self._format_history_for_gemini(chat_history)
+            # 3. Construir el mensaje del usuario (Pregunta + Datos del Ticket)
+            full_query = user_query
+            if specific_ticket_info:
+                full_query += f"\n\n--- DETALLES DEL TICKET A ANALIZAR ---\n{specific_ticket_info}"
+
+            # 4. Llamada a AWS Bedrock (DeepSeek R1)
+            response = self.aws_client.converse(
+                modelId=self.model_id,
+                messages=[{"role": "user", "content": [{"text": full_query}]}],
+                system=[{"text": system_instruction}],
+                inferenceConfig={
+                    "temperature": 0.1 # Muy bajo para evitar alucinaciones en la asignación
+                }
+            )
             
-            chat = self.model.start_chat(history=formatted_history)
+            respuesta_cruda = response['output']['message']['content'][0]['text']
             
-            response = chat.send_message(f"{system_instruction}\n\nPREGUNTA USUARIO: {user_question}")
-            return response.text
+            # 5. Limpieza especial para DeepSeek R1 (Reasoner)
+            # El modelo R1 suele incluir sus pensamientos entre <think>...</think>
+            if "</think>" in respuesta_cruda:
+                respuesta_limpia = respuesta_cruda.split("</think>")[-1].strip()
+                return respuesta_limpia
+                
+            return respuesta_cruda.strip()
 
         except Exception as e:
-            return f"⚠️ Error en LLM Service: {str(e)}"
+            return f"⚠️ Error en el Agente Principal (AWS Bedrock): {str(e)}"
