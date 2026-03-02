@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import datetime
-from config.settings import DATA_FILE_PATH
+from config.settings import DATA_FILE_PATH, TICKETS_FILE
 
 class TicketRepository:
     def __init__(self):
@@ -64,29 +64,34 @@ class TicketRepository:
         
         return workload
 
-    def get_unassigned_tickets(self, limit=5) -> str:
-        """Devuelve una lista formateada de los tickets abiertos sin técnico."""
+    def get_unassigned_tickets(self, limit: int = 5) -> list[dict]:
+        """
+        Retorna una LISTA DE DICCIONARIOS, no un texto.
+        """
         df = self.load_data()
-        col_status = 'Estado'
         col_tech = 'Asignado a - Técnico'
         
-        cerrados = ['Cerrado', 'Solucionado', 'Closed', 'Solved']
+        if col_tech not in df.columns:
+            return []
+
+        estados_cerrados = ['Cerrado', 'Solucionado', 'Closed', 'Solved']
         
-        # Filtros: No cerrados Y (Técnico es Null O Técnico es vacío)
-        mask_active = ~df[col_status].isin(cerrados)
-        mask_unassigned = (df[col_tech].isna()) | (df[col_tech] == '') | (df[col_tech] == 'Sin Asignar')
+        active_df = df[~df['Estado'].isin(estados_cerrados)]
         
-        pending = df[mask_active & mask_unassigned].head(limit)
+        mask_unassigned = (active_df[col_tech].isna()) | (active_df[col_tech] == "Sin Asignar")
+        unassigned_df = active_df[mask_unassigned]
         
-        if pending.empty:
-            return "No hay tickets pendientes de asignación."
+        head_tickets = unassigned_df.head(limit)
+        
+        tickets_list = []
+        for _, row in head_tickets.iterrows():
+            tickets_list.append({
+                "id": row.get('ID', 'N/A'),
+                "titulo": row.get('Título', 'Sin título'),
+                "descripcion": str(row.get('Descripción', ''))[:200] + "..."
+            })
             
-        # Formatear para el LLM
-        report = []
-        for _, row in pending.iterrows():
-            report.append(f"- ID {row['ID']}: {row['Título']} (Estado: {row['Estado']})")
-        
-        return "\n".join(report)
+        return tickets_list
 
     def get_ticket_details(self, ticket_id: str) -> str:
         """Busca un ticket específico por ID y devuelve sus detalles."""
@@ -113,3 +118,100 @@ class TicketRepository:
         - Descripción/Contenido: {str(row.get('Descripción', 'Sin contenido'))[:500]}... (truncado)
         """
         return details
+    
+class GlpiRepository:
+    def __init__(self):
+        self.file_path = TICKETS_FILE
+
+    def _check_file_exists(self):
+        if not self.file_path.exists():
+            raise FileNotFoundError(f"❌ El archivo de datos no existe en: {self.file_path}")
+    
+    def get_unassigned_tickets(self, limit: int = 5) -> list[dict]:
+        """
+        Retorna una lista de los tickets más antiguos que no tienen técnico asignado.
+        """
+        df = self.get_dataframe()
+        
+        # Filtrar donde el técnico sea "Sin Asignar"
+        unassigned_df = df[df['Asignado a - Técnico'] == "Sin Asignar"]
+        
+        estados_inactivos = ['Cerrado', 'Solucionado', 'Closed', 'Solved']
+        unassigned_df = unassigned_df[~unassigned_df['Estado'].isin(estados_inactivos)]
+        
+        head_tickets = unassigned_df.head(limit)
+        
+        tickets_list = []
+        for _, row in head_tickets.iterrows():
+            tickets_list.append({
+                "id": row['ID'],
+                "titulo": row.get('Título', 'Sin título'),
+                "descripcion": str(row.get('Descripción', ''))[:200] + "..."
+            })
+            
+        return tickets_list
+
+    def get_last_update_time(self) -> str:
+        """Retorna la fecha de modificación del archivo CSV formateada."""
+        try:
+            self._check_file_exists()
+            timestamp = os.path.getmtime(self.file_path)
+            dt_object = datetime.datetime.fromtimestamp(timestamp)
+            return dt_object.strftime("%d/%m/%Y %H:%M:%S")
+        except Exception as e:
+            return "Desconocida"
+
+    def get_dataframe(self) -> pd.DataFrame:
+        """Lee el CSV crudo de GLPi y realiza la limpieza base."""
+        self._check_file_exists()
+        try:
+            # 1. Leer CSV (GLPi suele exportar en Latin-1 y separado por punto y coma)
+            df = pd.read_csv(self.file_path, sep=';', encoding='latin-1')
+            
+            # 2. Normalizar nombres de columnas (quitar espacios extra)
+            df.columns = df.columns.str.strip()
+            
+            # --- CORRECCIÓN CRÍTICA AQUÍ ---
+            # Rellenamos los NaN de la columna de técnicos INMEDIATAMENTE al cargar
+            if 'Asignado a - Técnico' in df.columns:
+                df['Asignado a - Técnico'] = df['Asignado a - Técnico'].fillna("Sin Asignar")
+            
+            return df
+        except Exception as e:
+            raise RuntimeError(f"Error al leer el CSV de GLPi: {e}")
+
+    def get_team_workload(self) -> dict:
+        """Calcula la carga de trabajo por técnico (tickets activos)."""
+        # Ahora llamamos a get_dataframe que ya nos trae los datos limpios
+        df = self.get_dataframe()
+        
+        required_cols = ['ID', 'Estado', 'Asignado a - Técnico']
+        if not all(col in df.columns for col in required_cols):
+            missing = [c for c in required_cols if c not in df.columns]
+            raise ValueError(f"El CSV no tiene las columnas esperadas de GLPi. Faltan: {missing}")
+
+        # Filtrar tickets activos
+        estados_inactivos = ['Cerrado', 'Solucionado', 'Closed', 'Solved']
+        active_tickets = df[~df['Estado'].isin(estados_inactivos)]
+
+        # Contar ocurrencias
+        workload_series = active_tickets['Asignado a - Técnico'].value_counts()
+        
+        # Convertir a diccionario
+        return workload_series.to_dict()
+
+    def get_ticket_details(self, ticket_id: str) -> str:
+        """
+        Método auxiliar para buscar un ticket específico.
+        Útil si quieres pasarle el contexto de un ticket específico al LLM.
+        """
+        df = self.get_dataframe()
+        # Convertir a string para asegurar comparación
+        ticket = df[df['ID'].astype(str) == str(ticket_id)]
+        
+        if ticket.empty:
+            return "Ticket no encontrado."
+            
+        # Convertir la fila a texto legible
+        row = ticket.iloc[0]
+        return f"ID: {row['ID']}, Título: {row.get('Título', 'Sin título')}, Estado: {row['Estado']}, Técnico: {row['Asignado a - Técnico']}"
