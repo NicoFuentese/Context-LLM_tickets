@@ -2,7 +2,7 @@
 
 Asistente basado en IA para infraestructura TI, diseñado para analizar cargas de trabajo de GLPi y sugerir asignaciones óptimas. **Smart-IT Ops Advisor** es una aplicación de inteligencia artificial diseñada para optimizar las operaciones de una Mesa de Ayuda de TI. Actúa como un *Tech Lead Virtual* capaz de clasificar, enrutar y sugerir asignaciones de tickets de soporte técnico (provenientes de sistemas como GLPi) basándose en la carga de trabajo del equipo, especialidades técnicas y manuales de procedimiento.
 
-## La Problemática (Legacy Ops)
+## Problemática (Legacy Ops)
 
 En la operación diaria de una Mesa de Ayuda (Service Desk), los coordinadores y Tech Leads enfrentan tres desafíos críticos que ralentizan el tiempo de resolución (MTTR):
 
@@ -168,7 +168,7 @@ sequenceDiagram
     Interfaz-->>Usuario: Sugerencia de Asignación + Justificación + Pasos RAG
 ```
 
-## Estrategia del LLM
+## Estrategia del *Large Language Model* (LLM)
 
 Para lograr respuestas precisas y seguras, implementamos tres capas de control en el modelo de lenguaje:
 
@@ -224,12 +224,20 @@ pip install -r requirements.txt
 deactivate
 ```
 
+### Para ejecutar la aplicación
+```powershell
+#Correr proyecto
+streamlit run app.py
+```
+
 *nota: Asegúrate de que tu requirements.txt incluya: streamlit, pandas, scikit-learn, joblib, boto3, python-dotenv, chromadb, pypdf, sentence-transformers*
 
-### Tu VS Code no te reconoce tus dependencias?
+### Problemas frecuentes
+
+#### Tu VS Code no te reconoce tus dependencias?
 Esto ocurre porque VS Code esta "mirando" tu Python global para hacer el autocompletado y la revision de errores. Posiblemente es por configuración del interprete.
 
-### Para arreglarlo selecciona el interprete Correcto:
+#### Para arreglarlo selecciona el interprete Correcto:
     1. Presiona Ctrl + Shift + P (o Cmd + Shift + P en Mac) para abrir la paleta de comandos.
     2. Escribe y selecciona: Python: Select Interpreter.
     3. Verás una lista. Busca la opción que diga algo como:
@@ -239,10 +247,10 @@ Esto ocurre porque VS Code esta "mirando" tu Python global para hacer el autocom
     5. Espera unos segundos. El error de Pylance debería desaparecer.
 
 
-### Configuración de Variables de Entorno (.env)
+#### Configuración de Variables de Entorno (.env)
 El archivo .env actúa como una "caja fuerte" que guarda sus claves secretas y preferencias locales.
 
-### Pasos para crearlo:
+#### Pasos para crearlo:
 1. Navegue a la carpeta raíz del proyecto.
 2. Cree un nuevo archivo de texto vacío.
 3. Renómbrelo a: .env (Importante eliminar el formato .txt).
@@ -267,16 +275,11 @@ AWS_REGION= REGION_AWS
 DEEPSEEK_MODEL_ID= MODELO_QUE_USAS
 ```
 
-### Quieres consultar los modelos que tienes disponibles?
+#### Quieres consultar los modelos que tienes disponibles?
 ```powershell
 #Encontrar modelos disponibles de Gemini
 cd .\services\
 python test_models.py
-```
-### Para ejecutar la aplicación
-```powershell
-#Correr proyecto
-streamlit run app.py
 ```
 
 ## Preparar los Datos y Modelos
@@ -294,12 +297,12 @@ La primera vez que arranques la aplicación, el motor de conocimiento (RAG) esta
     2. Ve a la barra lateral izquierda y haz clic en el botón "🔄 Re-indexar PDFs".
     3. El sistema descargará el modelo de embeddings local de HuggingFace (solo la primera vez) y vectorizará todos tus manuales.
 
-# Uso del sistema
+## Uso del sistema
 - **Métricas en Vivo**: Observa la carga de trabajo de tu equipo actualizada al instante en la barra lateral.
 - **Asignación Inteligente**: En el chat principal, escribe algo como: "¿A quién le asigno el ticket #102?". El sistema pasará el ticket por el motor SVM, deducirá la categoría, verificará quién está disponible, leerá el manual pertinente y te dará una recomendación justificada.
 - **Gestión de Pendientes**: Si solo preguntas "¿Qué tickets tengo pendientes?", el agente evaluará tu cola de trabajo sin asignar y sugerirá acciones para descongestionarla.
 
-# Pruebas de uso LLM
+## Pruebas de uso LLM
 
 *Prompt:* "Recomienda un técnico para el id [ID_REAL]"
 
@@ -310,3 +313,9 @@ La primera vez que arranques la aplicación, el motor de conocimiento (RAG) esta
 *Prompt:* "Asigna el ticket #[ID_DE_REDES]. Es urgente."
 
 *Prompt:* "Si llega un ticket crítico sobre caída del Firewall, ¿quién es el más apto para verlo según la carga actual?"
+
+## Referecias
+
+- Vajjala, S., Majumder, B., Gupta, A., & Surana, H. (2020). Practical natural language processing: a comprehensive guide to building real-world NLP systems. O'Reilly Media.
+- Iusztin, M. L. P. (2024). LLM Engineer's Handbook. Packt Publishing.
+- Fregly, C., Barth, A., & Eigenbrode, S. (2023). Generative AI on AWS: Building context-aware multimodal reasoning applications. " O'Reilly Media, Inc.".
